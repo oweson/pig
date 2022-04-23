@@ -21,7 +21,7 @@
 	<parent>
 		<groupId>com.pig4cloud</groupId>
 		<artifactId>pig-visual</artifactId>
-		<version>3.4.8</version>
+		<version>3.4.9</version>
 	</parent>
 
 	<artifactId>pig-monitor</artifactId>
@@ -45,11 +45,6 @@
 		<dependency>
 			<groupId>com.alibaba.cloud</groupId>
 			<artifactId>spring-cloud-starter-alibaba-nacos-config</artifactId>
-		</dependency>
-		<!--断路器依赖-->
-		<dependency>
-			<groupId>com.pig4cloud</groupId>
-			<artifactId>pig-common-feign</artifactId>
 		</dependency>
 		<!--undertow容器-->
 		<dependency>
