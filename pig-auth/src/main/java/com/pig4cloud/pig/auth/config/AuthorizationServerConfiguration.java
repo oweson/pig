@@ -16,137 +16,125 @@
 
 package com.pig4cloud.pig.auth.config;
 
+import com.pig4cloud.pig.auth.support.CustomeOAuth2AccessTokenGenerator;
+import com.pig4cloud.pig.auth.support.core.CustomeOAuth2TokenCustomizer;
+import com.pig4cloud.pig.auth.support.core.FormIdentityLoginConfigurer;
+import com.pig4cloud.pig.auth.support.core.PigDaoAuthenticationProvider;
+import com.pig4cloud.pig.auth.support.handler.PigAuthenticationFailureEventHandler;
+import com.pig4cloud.pig.auth.support.handler.PigAuthenticationSuccessEventHandler;
+import com.pig4cloud.pig.auth.support.password.OAuth2ResourceOwnerPasswordAuthenticationConverter;
+import com.pig4cloud.pig.auth.support.password.OAuth2ResourceOwnerPasswordAuthenticationProvider;
+import com.pig4cloud.pig.auth.support.sms.OAuth2ResourceOwnerSmsAuthenticationConverter;
+import com.pig4cloud.pig.auth.support.sms.OAuth2ResourceOwnerSmsAuthenticationProvider;
 import com.pig4cloud.pig.common.core.constant.SecurityConstants;
-import com.pig4cloud.pig.common.security.component.PigWebResponseExceptionTranslator;
-import com.pig4cloud.pig.common.security.grant.ResourceOwnerCustomAppTokenGranter;
-import com.pig4cloud.pig.common.security.service.PigClientDetailsService;
-import com.pig4cloud.pig.common.security.service.PigCustomTokenServices;
-import com.pig4cloud.pig.common.security.service.PigUser;
 import lombok.RequiredArgsConstructor;
-import lombok.SneakyThrows;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.http.HttpMethod;
+import org.springframework.core.Ordered;
+import org.springframework.core.annotation.Order;
 import org.springframework.security.authentication.AuthenticationManager;
-import org.springframework.security.oauth2.common.DefaultOAuth2AccessToken;
-import org.springframework.security.oauth2.config.annotation.configurers.ClientDetailsServiceConfigurer;
-import org.springframework.security.oauth2.config.annotation.web.configuration.AuthorizationServerConfigurerAdapter;
-import org.springframework.security.oauth2.config.annotation.web.configuration.EnableAuthorizationServer;
-import org.springframework.security.oauth2.config.annotation.web.configurers.AuthorizationServerEndpointsConfigurer;
-import org.springframework.security.oauth2.config.annotation.web.configurers.AuthorizationServerSecurityConfigurer;
-import org.springframework.security.oauth2.provider.ClientDetailsService;
-import org.springframework.security.oauth2.provider.CompositeTokenGranter;
-import org.springframework.security.oauth2.provider.TokenGranter;
-import org.springframework.security.oauth2.provider.token.TokenEnhancer;
-import org.springframework.security.oauth2.provider.token.TokenStore;
+import org.springframework.security.config.annotation.web.builders.HttpSecurity;
+import org.springframework.security.config.annotation.web.configurers.oauth2.server.authorization.OAuth2AuthorizationServerConfigurer;
+import org.springframework.security.oauth2.server.authorization.OAuth2AuthorizationService;
+import org.springframework.security.oauth2.server.authorization.config.ProviderSettings;
+import org.springframework.security.oauth2.server.authorization.token.DelegatingOAuth2TokenGenerator;
+import org.springframework.security.oauth2.server.authorization.token.OAuth2RefreshTokenGenerator;
+import org.springframework.security.oauth2.server.authorization.token.OAuth2TokenGenerator;
+import org.springframework.security.oauth2.server.authorization.web.authentication.*;
+import org.springframework.security.web.DefaultSecurityFilterChain;
+import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.authentication.AuthenticationConverter;
+import org.springframework.security.web.util.matcher.RequestMatcher;
 
-import javax.sql.DataSource;
-import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.HashMap;
-import java.util.Map;
 
 /**
  * @author lengleng
- * @date 2019/2/1 认证服务器配置
+ * @date 2022/5/27
+ *
+ * 认证服务器配置
  */
 @Configuration
 @RequiredArgsConstructor
-@EnableAuthorizationServer
-public class AuthorizationServerConfiguration extends AuthorizationServerConfigurerAdapter {
+public class AuthorizationServerConfiguration {
 
-	private final DataSource dataSource;
+	private final OAuth2AuthorizationService authorizationService;
 
-	private final AuthenticationManager authenticationManager;
+	@Bean
+	@Order(Ordered.HIGHEST_PRECEDENCE)
+	public SecurityFilterChain authorizationServerSecurityFilterChain(HttpSecurity http) throws Exception {
+		OAuth2AuthorizationServerConfigurer<HttpSecurity> authorizationServerConfigurer = new OAuth2AuthorizationServerConfigurer<>();
 
-	private final TokenStore redisTokenStore;
+		http.apply(authorizationServerConfigurer.tokenEndpoint((tokenEndpoint) -> {// 个性化认证授权端点
+			tokenEndpoint.accessTokenRequestConverter(accessTokenRequestConverter()) // 注入自定义的授权认证Converter
+					.accessTokenResponseHandler(new PigAuthenticationSuccessEventHandler()) // 登录成功处理器
+					.errorResponseHandler(new PigAuthenticationFailureEventHandler());// 登录失败处理器
+		}).authorizationEndpoint( // 授权码端点个性化confirm页面
+				authorizationEndpoint -> authorizationEndpoint.consentPage(SecurityConstants.CUSTOM_CONSENT_PAGE_URI)));
 
-	@Override
-	@SneakyThrows
-	public void configure(ClientDetailsServiceConfigurer clients) {
-		clients.withClientDetails(pigClientDetailsService());
-	}
+		RequestMatcher endpointsMatcher = authorizationServerConfigurer.getEndpointsMatcher();
+		DefaultSecurityFilterChain securityFilterChain = http.requestMatcher(endpointsMatcher)
+				.authorizeRequests(authorizeRequests -> authorizeRequests.anyRequest().authenticated())
+				.apply(authorizationServerConfigurer.authorizationService(authorizationService)// redis存储token的实现
+						.providerSettings(ProviderSettings.builder().issuer(SecurityConstants.PROJECT_LICENSE).build()))
+				// 授权码登录的登录页个性化
+				.and().apply(new FormIdentityLoginConfigurer()).and().build();
 
-	@Override
-	public void configure(AuthorizationServerSecurityConfigurer oauthServer) {
-		oauthServer.allowFormAuthenticationForClients().checkTokenAccess("permitAll()");
-	}
-
-	@Override
-	public void configure(AuthorizationServerEndpointsConfigurer endpoints) {
-		endpoints.allowedTokenEndpointRequestMethods(HttpMethod.GET, HttpMethod.POST).tokenServices(tokenServices())
-				.tokenStore(redisTokenStore).tokenEnhancer(tokenEnhancer()).authenticationManager(authenticationManager)
-				.reuseRefreshTokens(false).pathMapping("/oauth/confirm_access", "/token/confirm_access")
-				.exceptionTranslator(new PigWebResponseExceptionTranslator());
-		setTokenGranter(endpoints);
-	}
-
-	/**
-	 * 自定义 APP 认证类型
-	 * @param endpoints AuthorizationServerEndpointsConfigurer
-	 */
-	private void setTokenGranter(AuthorizationServerEndpointsConfigurer endpoints) {
-		// 获取默认授权类型
-		TokenGranter tokenGranter = endpoints.getTokenGranter();
-		ArrayList<TokenGranter> tokenGranters = new ArrayList<>(Arrays.asList(tokenGranter));
-		ResourceOwnerCustomAppTokenGranter resourceOwnerCustomAppTokenGranter = new ResourceOwnerCustomAppTokenGranter(
-				authenticationManager, endpoints.getTokenServices(), endpoints.getClientDetailsService(),
-				endpoints.getOAuth2RequestFactory());
-		tokenGranters.add(resourceOwnerCustomAppTokenGranter);
-		CompositeTokenGranter compositeTokenGranter = new CompositeTokenGranter(tokenGranters);
-		endpoints.tokenGranter(compositeTokenGranter);
+		// 注入自定义授权模式实现
+		addCustomOAuth2GrantAuthenticationProvider(http);
+		return securityFilterChain;
 	}
 
 	/**
-	 * token 生成接口输出增强
-	 * @return TokenEnhancer
+	 * 令牌生成规则实现 </br>
+	 * client:username:uuid
+	 * @return OAuth2TokenGenerator
 	 */
 	@Bean
-	public TokenEnhancer tokenEnhancer() {
-		return (accessToken, authentication) -> {
-			final Map<String, Object> additionalInfo = new HashMap<>(4);
-			additionalInfo.put(SecurityConstants.DETAILS_LICENSE, SecurityConstants.PROJECT_LICENSE);
-			String clientId = authentication.getOAuth2Request().getClientId();
-			additionalInfo.put(SecurityConstants.CLIENT_ID, clientId);
-
-			// 客户端模式不返回具体用户信息
-			if (SecurityConstants.CLIENT_CREDENTIALS.equals(authentication.getOAuth2Request().getGrantType())) {
-				((DefaultOAuth2AccessToken) accessToken).setAdditionalInformation(additionalInfo);
-				return accessToken;
-			}
-
-			PigUser pigUser = (PigUser) authentication.getUserAuthentication().getPrincipal();
-			additionalInfo.put(SecurityConstants.DETAILS_USER, pigUser);
-			((DefaultOAuth2AccessToken) accessToken).setAdditionalInformation(additionalInfo);
-			return accessToken;
-		};
+	public OAuth2TokenGenerator oAuth2TokenGenerator() {
+		CustomeOAuth2AccessTokenGenerator accessTokenGenerator = new CustomeOAuth2AccessTokenGenerator();
+		// 注入Token 增加关联用户信息
+		accessTokenGenerator.setAccessTokenCustomizer(new CustomeOAuth2TokenCustomizer());
+		return new DelegatingOAuth2TokenGenerator(accessTokenGenerator, new OAuth2RefreshTokenGenerator());
 	}
 
 	/**
-	 * 客户端信息加载处理
-	 * @return ClientDetailsService
+	 * request -> xToken 注入请求转换器
+	 * @return DelegatingAuthenticationConverter
 	 */
-	@Bean
-	public ClientDetailsService pigClientDetailsService() {
-		PigClientDetailsService clientDetailsService = new PigClientDetailsService(dataSource);
-		clientDetailsService.setSelectClientDetailsSql(SecurityConstants.DEFAULT_SELECT_STATEMENT);
-		clientDetailsService.setFindClientDetailsSql(SecurityConstants.DEFAULT_FIND_STATEMENT);
-		return clientDetailsService;
+	private AuthenticationConverter accessTokenRequestConverter() {
+		return new DelegatingAuthenticationConverter(Arrays.asList(
+				new OAuth2ResourceOwnerPasswordAuthenticationConverter(),
+				new OAuth2ResourceOwnerSmsAuthenticationConverter(), new OAuth2RefreshTokenAuthenticationConverter(),
+				new OAuth2ClientCredentialsAuthenticationConverter(),
+				new OAuth2AuthorizationCodeAuthenticationConverter(),
+				new OAuth2AuthorizationCodeRequestAuthenticationConverter()));
 	}
 
 	/**
-	 * token 核心处理
-	 * @return tokenServices
+	 * 注入授权模式实现提供方
+	 *
+	 * 1. 密码模式 </br>
+	 * 2. 短信登录 </br>
+	 *
 	 */
-	@Bean
-	public PigCustomTokenServices tokenServices() {
-		PigCustomTokenServices tokenServices = new PigCustomTokenServices();
-		tokenServices.setTokenStore(redisTokenStore);
-		tokenServices.setSupportRefreshToken(true);
-		tokenServices.setReuseRefreshToken(false);
-		tokenServices.setClientDetailsService(pigClientDetailsService());
-		tokenServices.setTokenEnhancer(tokenEnhancer());
-		return tokenServices;
+	@SuppressWarnings("unchecked")
+	private void addCustomOAuth2GrantAuthenticationProvider(HttpSecurity http) {
+		AuthenticationManager authenticationManager = http.getSharedObject(AuthenticationManager.class);
+		OAuth2AuthorizationService authorizationService = http.getSharedObject(OAuth2AuthorizationService.class);
+
+		OAuth2ResourceOwnerPasswordAuthenticationProvider resourceOwnerPasswordAuthenticationProvider = new OAuth2ResourceOwnerPasswordAuthenticationProvider(
+				authenticationManager, authorizationService, oAuth2TokenGenerator());
+
+		OAuth2ResourceOwnerSmsAuthenticationProvider resourceOwnerSmsAuthenticationProvider = new OAuth2ResourceOwnerSmsAuthenticationProvider(
+				authenticationManager, authorizationService, oAuth2TokenGenerator());
+
+		// 处理 UsernamePasswordAuthenticationToken
+		http.authenticationProvider(new PigDaoAuthenticationProvider());
+		// 处理 OAuth2ResourceOwnerPasswordAuthenticationToken
+		http.authenticationProvider(resourceOwnerPasswordAuthenticationProvider);
+		// 处理 OAuth2ResourceOwnerSmsAuthenticationToken
+		http.authenticationProvider(resourceOwnerSmsAuthenticationProvider);
 	}
 
 }

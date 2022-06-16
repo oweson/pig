@@ -19,30 +19,45 @@ package com.pig4cloud.pig.auth.endpoint;
 import cn.hutool.core.map.MapUtil;
 import cn.hutool.core.util.StrUtil;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import com.pig4cloud.pig.admin.api.entity.SysOauthClientDetails;
+import com.pig4cloud.pig.admin.api.feign.RemoteClientDetailsService;
+import com.pig4cloud.pig.admin.api.vo.TokenVo;
 import com.pig4cloud.pig.common.core.constant.CacheConstants;
 import com.pig4cloud.pig.common.core.constant.CommonConstants;
+import com.pig4cloud.pig.common.core.constant.SecurityConstants;
 import com.pig4cloud.pig.common.core.util.R;
 import com.pig4cloud.pig.common.core.util.SpringContextHolder;
 import com.pig4cloud.pig.common.security.annotation.Inner;
-import com.pig4cloud.pig.common.security.util.SecurityUtils;
+import com.pig4cloud.pig.common.security.util.OAuth2EndpointUtils;
+import com.pig4cloud.pig.common.security.util.OAuth2ErrorCodesExpand;
 import lombok.RequiredArgsConstructor;
+import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.cache.CacheManager;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
+import org.springframework.http.converter.HttpMessageConverter;
+import org.springframework.http.server.ServletServerHttpResponse;
 import org.springframework.security.authentication.event.LogoutSuccessEvent;
-import org.springframework.security.oauth2.common.OAuth2AccessToken;
-import org.springframework.security.oauth2.common.OAuth2RefreshToken;
-import org.springframework.security.oauth2.provider.AuthorizationRequest;
-import org.springframework.security.oauth2.provider.ClientDetails;
-import org.springframework.security.oauth2.provider.ClientDetailsService;
-import org.springframework.security.oauth2.provider.OAuth2Authentication;
-import org.springframework.security.oauth2.provider.token.TokenStore;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.oauth2.core.OAuth2AccessToken;
+import org.springframework.security.oauth2.core.OAuth2Error;
+import org.springframework.security.oauth2.core.OAuth2TokenType;
+import org.springframework.security.oauth2.core.endpoint.OAuth2AccessTokenResponse;
+import org.springframework.security.oauth2.core.endpoint.OAuth2ParameterNames;
+import org.springframework.security.oauth2.core.http.converter.OAuth2AccessTokenResponseHttpMessageConverter;
+import org.springframework.security.oauth2.core.http.converter.OAuth2ErrorHttpMessageConverter;
+import org.springframework.security.oauth2.server.authorization.OAuth2Authorization;
+import org.springframework.security.oauth2.server.authorization.OAuth2AuthorizationService;
+import org.springframework.util.StringUtils;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.servlet.ModelAndView;
 
-import javax.servlet.http.HttpServletRequest;
-import javax.servlet.http.HttpSession;
+import javax.servlet.http.HttpServletResponse;
+import java.security.Principal;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -58,11 +73,15 @@ import java.util.stream.Collectors;
 @RequestMapping("/token")
 public class PigTokenEndpoint {
 
-	private final ClientDetailsService clientDetailsService;
+	private final HttpMessageConverter<OAuth2AccessTokenResponse> accessTokenHttpResponseConverter = new OAuth2AccessTokenResponseHttpMessageConverter();
 
-	private final TokenStore tokenStore;
+	private final HttpMessageConverter<OAuth2Error> errorHttpResponseConverter = new OAuth2ErrorHttpMessageConverter();
 
-	private final RedisTemplate redisTemplate;
+	private final OAuth2AuthorizationService authorizationService;
+
+	private final RemoteClientDetailsService clientDetailsService;
+
+	private final RedisTemplate<String, Object> redisTemplate;
 
 	private final CacheManager cacheManager;
 
@@ -79,26 +98,19 @@ public class PigTokenEndpoint {
 		return modelAndView;
 	}
 
-	/**
-	 * 确认授权页面
-	 * @param request
-	 * @param session
-	 * @param modelAndView
-	 * @return
-	 */
 	@GetMapping("/confirm_access")
-	public ModelAndView confirm(HttpServletRequest request, HttpSession session, ModelAndView modelAndView) {
-		Map<String, Object> scopeList = (Map<String, Object>) request.getAttribute("scopes");
-		modelAndView.addObject("scopeList", scopeList.keySet());
+	public ModelAndView confirm(Principal principal, ModelAndView modelAndView,
+			@RequestParam(OAuth2ParameterNames.CLIENT_ID) String clientId,
+			@RequestParam(OAuth2ParameterNames.SCOPE) String scope,
+			@RequestParam(OAuth2ParameterNames.STATE) String state) {
 
-		Object auth = session.getAttribute("authorizationRequest");
-		if (auth != null) {
-			AuthorizationRequest authorizationRequest = (AuthorizationRequest) auth;
-			ClientDetails clientDetails = clientDetailsService.loadClientByClientId(authorizationRequest.getClientId());
-			modelAndView.addObject("app", clientDetails.getAdditionalInformation());
-			modelAndView.addObject("user", SecurityUtils.getUser());
-		}
-
+		R<SysOauthClientDetails> r = clientDetailsService.getClientDetailsById(clientId, SecurityConstants.FROM_IN);
+		SysOauthClientDetails clientDetails = r.getData();
+		Set<String> authorizedScopes = StringUtils.commaDelimitedListToSet(clientDetails.getScope());
+		modelAndView.addObject("clientId", clientId);
+		modelAndView.addObject("state", state);
+		modelAndView.addObject("scopeList", authorizedScopes);
+		modelAndView.addObject("principalName", principal.getName());
 		modelAndView.setViewName("ftl/confirm");
 		return modelAndView;
 	}
@@ -113,8 +125,37 @@ public class PigTokenEndpoint {
 			return R.ok();
 		}
 
-		String tokenValue = authHeader.replace(OAuth2AccessToken.BEARER_TYPE, StrUtil.EMPTY).trim();
+		String tokenValue = authHeader.replace(OAuth2AccessToken.TokenType.BEARER.getValue(), StrUtil.EMPTY).trim();
 		return removeToken(tokenValue);
+	}
+
+	/**
+	 * 校验token
+	 * @param token 令牌
+	 */
+	@SneakyThrows
+	@GetMapping("/check_token")
+	public void checkToken(String token, HttpServletResponse response) {
+		ServletServerHttpResponse httpResponse = new ServletServerHttpResponse(response);
+
+		if (StrUtil.isBlank(token)) {
+			httpResponse.setStatusCode(HttpStatus.UNAUTHORIZED);
+			this.errorHttpResponseConverter.write(new OAuth2Error(OAuth2ErrorCodesExpand.TOKEN_MISSING), null,
+					httpResponse);
+		}
+		OAuth2Authorization authorization = authorizationService.findByToken(token, OAuth2TokenType.ACCESS_TOKEN);
+
+		// 如果令牌不存在 返回401
+		if (authorization == null) {
+			httpResponse.setStatusCode(HttpStatus.UNAUTHORIZED);
+			this.errorHttpResponseConverter.write(new OAuth2Error(OAuth2ErrorCodesExpand.TOKEN_MISSING), null,
+					httpResponse);
+		}
+
+		Map<String, Object> claims = authorization.getAccessToken().getClaims();
+		OAuth2AccessTokenResponse sendAccessTokenResponse = OAuth2EndpointUtils.sendAccessTokenResponse(authorization,
+				claims);
+		this.accessTokenHttpResponseConverter.write(sendAccessTokenResponse, MediaType.APPLICATION_JSON, httpResponse);
 	}
 
 	/**
@@ -124,24 +165,18 @@ public class PigTokenEndpoint {
 	@Inner
 	@DeleteMapping("/{token}")
 	public R<Boolean> removeToken(@PathVariable("token") String token) {
-		OAuth2AccessToken accessToken = tokenStore.readAccessToken(token);
-		if (accessToken == null || StrUtil.isBlank(accessToken.getValue())) {
+		OAuth2Authorization authorization = authorizationService.findByToken(token, OAuth2TokenType.ACCESS_TOKEN);
+		OAuth2Authorization.Token<OAuth2AccessToken> accessToken = authorization.getAccessToken();
+		if (accessToken == null || StrUtil.isBlank(accessToken.getToken().getTokenValue())) {
 			return R.ok();
 		}
-
-		OAuth2Authentication auth2Authentication = tokenStore.readAuthentication(accessToken);
 		// 清空用户信息
-		cacheManager.getCache(CacheConstants.USER_DETAILS).evict(auth2Authentication.getName());
-
+		cacheManager.getCache(CacheConstants.USER_DETAILS).evict(authorization.getPrincipalName());
 		// 清空access token
-		tokenStore.removeAccessToken(accessToken);
-
-		// 清空 refresh token
-		OAuth2RefreshToken refreshToken = accessToken.getRefreshToken();
-		tokenStore.removeRefreshToken(refreshToken);
-
+		authorizationService.remove(authorization);
 		// 处理自定义退出事件，保存相关日志
-		SpringContextHolder.publishEvent(new LogoutSuccessEvent(auth2Authentication));
+		Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+		SpringContextHolder.publishEvent(new LogoutSuccessEvent(authentication));
 		return R.ok();
 	}
 
@@ -154,13 +189,26 @@ public class PigTokenEndpoint {
 	@PostMapping("/page")
 	public R<Page> tokenList(@RequestBody Map<String, Object> params) {
 		// 根据分页参数获取对应数据
-		String key = String.format("%sauth_to_access:*", CacheConstants.PROJECT_OAUTH_ACCESS);
+		String key = String.format("%s::*", CacheConstants.PROJECT_OAUTH_ACCESS);
 		int current = MapUtil.getInt(params, CommonConstants.CURRENT);
 		int size = MapUtil.getInt(params, CommonConstants.SIZE);
 		Set<String> keys = redisTemplate.keys(key);
 		List<String> pages = keys.stream().skip((current - 1) * size).limit(size).collect(Collectors.toList());
 		Page result = new Page(current, size);
-		result.setRecords(redisTemplate.opsForValue().multiGet(pages));
+
+		List<TokenVo> tokenVoList = redisTemplate.opsForValue().multiGet(pages).stream().map(obj -> {
+			OAuth2Authorization authorization = (OAuth2Authorization) obj;
+			TokenVo tokenVo = new TokenVo();
+			tokenVo.setClientId(authorization.getRegisteredClientId());
+			tokenVo.setId(authorization.getId());
+			tokenVo.setUsername(authorization.getPrincipalName());
+			OAuth2Authorization.Token<OAuth2AccessToken> accessToken = authorization.getAccessToken();
+			tokenVo.setAccessToken(accessToken.getToken().getTokenValue());
+			tokenVo.setExpiresAt(accessToken.getToken().getExpiresAt());
+			tokenVo.setIssuedAt(accessToken.getToken().getIssuedAt());
+			return tokenVo;
+		}).collect(Collectors.toList());
+		result.setRecords(tokenVoList);
 		result.setTotal(keys.size());
 		return R.ok(result);
 	}

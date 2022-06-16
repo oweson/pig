@@ -27,9 +27,9 @@ public class SpringDocConfiguration {
 	@Lazy(false)
 	@ConditionalOnProperty(name = "springdoc.api-docs.enabled", matchIfMissing = true)
 	public List<GroupedOpenApi> apis(SwaggerUiConfigParameters swaggerUiConfigParameters,
-			SwaggerProperties properties) {
+			SwaggerDocProperties swaggerProperties) {
 		List<GroupedOpenApi> groups = new ArrayList<>();
-		for (String value : properties.services.values()) {
+		for (String value : swaggerProperties.getServices().values()) {
 			swaggerUiConfigParameters.addGroup(value);
 		}
 		return groups;
@@ -38,9 +38,34 @@ public class SpringDocConfiguration {
 	@Data
 	@Component
 	@ConfigurationProperties("swagger")
-	class SwaggerProperties {
+	public class SwaggerDocProperties {
 
 		private Map<String, String> services;
+
+		/**
+		 * 认证参数
+		 */
+		private SwaggerBasic basic = new SwaggerBasic();
+
+		@Data
+		public class SwaggerBasic {
+
+			/**
+			 * 是否开启 basic 认证
+			 */
+			private Boolean enabled;
+
+			/**
+			 * 用户名
+			 */
+			private String username;
+
+			/**
+			 * 密码
+			 */
+			private String password;
+
+		}
 
 	}
 

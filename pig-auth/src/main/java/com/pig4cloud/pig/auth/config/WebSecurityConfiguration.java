@@ -16,102 +16,42 @@
 
 package com.pig4cloud.pig.auth.config;
 
-import com.pig4cloud.pig.common.security.component.PigDaoAuthenticationProvider;
-import com.pig4cloud.pig.common.security.grant.CustomAppAuthenticationProvider;
-import com.pig4cloud.pig.common.security.handler.FormAuthenticationFailureHandler;
-import com.pig4cloud.pig.common.security.handler.SsoLogoutSuccessHandler;
-import lombok.RequiredArgsConstructor;
-import lombok.SneakyThrows;
+import com.pig4cloud.pig.auth.support.core.FormIdentityLoginConfigurer;
+import com.pig4cloud.pig.auth.support.core.PigDaoAuthenticationProvider;
 import org.springframework.context.annotation.Bean;
-import org.springframework.context.annotation.Configuration;
-import org.springframework.context.annotation.Primary;
-import org.springframework.core.annotation.Order;
-import org.springframework.security.authentication.AuthenticationManager;
-import org.springframework.security.config.annotation.authentication.builders.AuthenticationManagerBuilder;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
-import org.springframework.security.config.annotation.web.builders.WebSecurity;
-import org.springframework.security.config.annotation.web.configuration.WebSecurityConfigurerAdapter;
-import org.springframework.security.crypto.factory.PasswordEncoderFactories;
-import org.springframework.security.crypto.password.PasswordEncoder;
-import org.springframework.security.web.authentication.AuthenticationFailureHandler;
-import org.springframework.security.web.authentication.logout.LogoutSuccessHandler;
+import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
+import org.springframework.security.config.annotation.web.configuration.WebSecurityCustomizer;
+import org.springframework.security.web.SecurityFilterChain;
 
 /**
+ * 服务安全相关配置
+ *
  * @author lengleng
- * @date 2022/1/12 认证相关配置
+ * @date 2022/1/12
  */
-@Primary
-@Order(90)
-@Configuration
-@RequiredArgsConstructor
-public class WebSecurityConfiguration extends WebSecurityConfigurerAdapter {
-
-	@Override
-	@SneakyThrows
-	protected void configure(HttpSecurity http) {
-		http.formLogin().loginPage("/token/login").loginProcessingUrl("/token/form")
-				.failureHandler(authenticationFailureHandler()).and().logout()
-				.logoutSuccessHandler(logoutSuccessHandler()).deleteCookies("JSESSIONID").invalidateHttpSession(true)
-				.and().authorizeRequests().antMatchers("/token/**", "/actuator/**", "/mobile/**").permitAll()
-				.anyRequest().authenticated().and().csrf().disable();
-	}
+@EnableWebSecurity(debug = true)
+public class WebSecurityConfiguration {
 
 	/**
-	 * 自定义 provider 列表注入
-	 * @param auth AuthenticationManagerBuilder
+	 * spring security 默认的安全策略
+	 * @param http security注入点
+	 * @return SecurityFilterChain
+	 * @throws Exception
 	 */
-	@Override
-	protected void configure(AuthenticationManagerBuilder auth) {
-		PigDaoAuthenticationProvider daoAuthenticationProvider = new PigDaoAuthenticationProvider();
-		daoAuthenticationProvider.setPasswordEncoder(passwordEncoder());
-
-		// 处理默认的密码模式认证
-		auth.authenticationProvider(daoAuthenticationProvider);
-		// 自定义的认证模式
-		auth.authenticationProvider(new CustomAppAuthenticationProvider());
+	@Bean
+	SecurityFilterChain defaultSecurityFilterChain(HttpSecurity http) throws Exception {
+		http.authorizeRequests(authorizeRequests -> authorizeRequests.antMatchers("/token/*").permitAll()// 开放自定义的部分端点
+				.anyRequest().authenticated()).headers().frameOptions().sameOrigin()// 避免iframe同源无法登录
+				.and().apply(new FormIdentityLoginConfigurer()); // 表单登录个性化
+		// 处理 UsernamePasswordAuthenticationToken
+		http.authenticationProvider(new PigDaoAuthenticationProvider());
+		return http.build();
 	}
 
 	@Bean
-	@Override
-	@SneakyThrows
-	public AuthenticationManager authenticationManagerBean() {
-		return super.authenticationManagerBean();
-	}
-
-	/**
-	 * 认证中心静态资源处理
-	 * @param web WebSecurity
-	 */
-	@Override
-	public void configure(WebSecurity web) {
-		web.ignoring().antMatchers("/css/**", "/error");
-	}
-
-	/**
-	 * sso 表单登录失败处理
-	 * @return FormAuthenticationFailureHandler
-	 */
-	@Bean
-	public AuthenticationFailureHandler authenticationFailureHandler() {
-		return new FormAuthenticationFailureHandler();
-	}
-
-	/**
-	 * SSO 退出逻辑处理
-	 * @return LogoutSuccessHandler
-	 */
-	@Bean
-	public LogoutSuccessHandler logoutSuccessHandler() {
-		return new SsoLogoutSuccessHandler();
-	}
-
-	/**
-	 * 密码处理器
-	 * @return 动态密码处理器 {类型}密文
-	 */
-	@Bean
-	public PasswordEncoder passwordEncoder() {
-		return PasswordEncoderFactories.createDelegatingPasswordEncoder();
+	public WebSecurityCustomizer webSecurityCustomizer() {
+		return (web) -> web.ignoring().antMatchers("/actuator/**", "/css/**", "/error");
 	}
 
 }

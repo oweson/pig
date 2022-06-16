@@ -18,15 +18,21 @@ package com.pig4cloud.pig.common.security.service;
 
 import lombok.Getter;
 import org.springframework.security.core.GrantedAuthority;
+import org.springframework.security.core.SpringSecurityCoreVersion;
 import org.springframework.security.core.userdetails.User;
+import org.springframework.security.oauth2.core.OAuth2AuthenticatedPrincipal;
 
 import java.util.Collection;
+import java.util.HashMap;
+import java.util.Map;
 
 /**
  * @author lengleng
  * @date 2019/2/1 扩展用户信息
  */
-public class PigUser extends User {
+public class PigUser extends User implements OAuth2AuthenticatedPrincipal {
+
+	private static final long serialVersionUID = SpringSecurityCoreVersion.SERIAL_VERSION_UID;
 
 	/**
 	 * 用户ID
@@ -53,6 +59,20 @@ public class PigUser extends User {
 		this.id = id;
 		this.deptId = deptId;
 		this.phone = phone;
+	}
+
+	/**
+	 * Get the OAuth 2.0 token attributes
+	 * @return the OAuth 2.0 token attributes
+	 */
+	@Override
+	public Map<String, Object> getAttributes() {
+		return new HashMap<>();
+	}
+
+	@Override
+	public String getName() {
+		return this.getUsername();
 	}
 
 }

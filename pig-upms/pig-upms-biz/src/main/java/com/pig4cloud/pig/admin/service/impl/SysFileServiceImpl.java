@@ -36,6 +36,8 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
 import javax.servlet.http.HttpServletResponse;
+import java.time.Duration;
+import java.time.temporal.ChronoUnit;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -124,6 +126,17 @@ public class SysFileServiceImpl extends ServiceImpl<SysFileMapper, SysFile> impl
 		sysFile.setType(FileUtil.extName(file.getOriginalFilename()));
 		sysFile.setBucketName(ossProperties.getBucketName());
 		this.save(sysFile);
+	}
+
+	/**
+	 * 默认获取文件的在线地址
+	 * @param bucket
+	 * @param fileName
+	 * @return
+	 */
+	@Override
+	public String onlineFile(String bucket, String fileName) {
+		return ossTemplate.getObjectURL(bucket, fileName, Duration.of(7, ChronoUnit.DAYS));
 	}
 
 }
