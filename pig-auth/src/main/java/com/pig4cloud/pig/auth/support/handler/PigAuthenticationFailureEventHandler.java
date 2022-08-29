@@ -16,7 +16,9 @@
 
 package com.pig4cloud.pig.auth.support.handler;
 
+import cn.hutool.core.util.StrUtil;
 import com.pig4cloud.pig.admin.api.entity.SysLog;
+import com.pig4cloud.pig.common.core.constant.CommonConstants;
 import com.pig4cloud.pig.common.core.util.R;
 import com.pig4cloud.pig.common.core.util.SpringContextHolder;
 import com.pig4cloud.pig.common.log.event.SysLogEvent;
@@ -29,8 +31,6 @@ import org.springframework.http.MediaType;
 import org.springframework.http.converter.json.MappingJackson2HttpMessageConverter;
 import org.springframework.http.server.ServletServerHttpResponse;
 import org.springframework.security.core.AuthenticationException;
-import org.springframework.security.oauth2.core.OAuth2AuthenticationException;
-import org.springframework.security.oauth2.core.OAuth2Error;
 import org.springframework.security.oauth2.core.endpoint.OAuth2ParameterNames;
 import org.springframework.security.web.authentication.AuthenticationFailureHandler;
 
@@ -66,22 +66,23 @@ public class PigAuthenticationFailureEventHandler implements AuthenticationFailu
 		logVo.setType(LogTypeEnum.ERROR.getType());
 		logVo.setException(exception.getLocalizedMessage());
 		// 发送异步日志事件
-		Long startTime = System.currentTimeMillis();
-		Long endTime = System.currentTimeMillis();
-		logVo.setTime(endTime - startTime);
+		String startTimeStr = request.getHeader(CommonConstants.REQUEST_START_TIME);
+		if (StrUtil.isNotBlank(startTimeStr)) {
+			Long startTime = Long.parseLong(startTimeStr);
+			Long endTime = System.currentTimeMillis();
+			logVo.setTime(endTime - startTime);
+		}
 		logVo.setCreateBy(username);
 		logVo.setUpdateBy(username);
 		SpringContextHolder.publishEvent(new SysLogEvent(logVo));
 		// 写出错误信息
-		sendErrorResponse(request, response, exception);
+		sendErrorResponse(response, exception);
 	}
 
-	private void sendErrorResponse(HttpServletRequest request, HttpServletResponse response,
-			AuthenticationException exception) throws IOException {
-		OAuth2Error error = ((OAuth2AuthenticationException) exception).getError();
+	private void sendErrorResponse(HttpServletResponse response, AuthenticationException exception) throws IOException {
 		ServletServerHttpResponse httpResponse = new ServletServerHttpResponse(response);
-		httpResponse.setStatusCode(HttpStatus.BAD_REQUEST);
-		this.errorHttpResponseConverter.write(R.failed(error.getDescription()), MediaType.APPLICATION_JSON,
+		httpResponse.setStatusCode(HttpStatus.UNAUTHORIZED);
+		this.errorHttpResponseConverter.write(R.failed(exception.getLocalizedMessage()), MediaType.APPLICATION_JSON,
 				httpResponse);
 	}
 

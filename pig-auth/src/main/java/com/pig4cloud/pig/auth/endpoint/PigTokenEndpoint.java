@@ -22,14 +22,17 @@ import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.pig4cloud.pig.admin.api.entity.SysOauthClientDetails;
 import com.pig4cloud.pig.admin.api.feign.RemoteClientDetailsService;
 import com.pig4cloud.pig.admin.api.vo.TokenVo;
+import com.pig4cloud.pig.auth.support.handler.PigAuthenticationFailureEventHandler;
 import com.pig4cloud.pig.common.core.constant.CacheConstants;
 import com.pig4cloud.pig.common.core.constant.CommonConstants;
 import com.pig4cloud.pig.common.core.constant.SecurityConstants;
 import com.pig4cloud.pig.common.core.util.R;
+import com.pig4cloud.pig.common.core.util.RetOps;
 import com.pig4cloud.pig.common.core.util.SpringContextHolder;
 import com.pig4cloud.pig.common.security.annotation.Inner;
 import com.pig4cloud.pig.common.security.util.OAuth2EndpointUtils;
 import com.pig4cloud.pig.common.security.util.OAuth2ErrorCodesExpand;
+import com.pig4cloud.pig.common.security.util.OAuthClientException;
 import lombok.RequiredArgsConstructor;
 import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
@@ -41,21 +44,21 @@ import org.springframework.http.MediaType;
 import org.springframework.http.converter.HttpMessageConverter;
 import org.springframework.http.server.ServletServerHttpResponse;
 import org.springframework.security.authentication.event.LogoutSuccessEvent;
-import org.springframework.security.core.Authentication;
-import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.oauth2.core.OAuth2AccessToken;
-import org.springframework.security.oauth2.core.OAuth2Error;
 import org.springframework.security.oauth2.core.OAuth2TokenType;
 import org.springframework.security.oauth2.core.endpoint.OAuth2AccessTokenResponse;
 import org.springframework.security.oauth2.core.endpoint.OAuth2ParameterNames;
 import org.springframework.security.oauth2.core.http.converter.OAuth2AccessTokenResponseHttpMessageConverter;
-import org.springframework.security.oauth2.core.http.converter.OAuth2ErrorHttpMessageConverter;
 import org.springframework.security.oauth2.server.authorization.OAuth2Authorization;
 import org.springframework.security.oauth2.server.authorization.OAuth2AuthorizationService;
+import org.springframework.security.oauth2.server.resource.InvalidBearerTokenException;
+import org.springframework.security.web.authentication.AuthenticationFailureHandler;
+import org.springframework.security.web.authentication.preauth.PreAuthenticatedAuthenticationToken;
 import org.springframework.util.StringUtils;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.servlet.ModelAndView;
 
+import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 import java.security.Principal;
 import java.util.List;
@@ -75,7 +78,7 @@ public class PigTokenEndpoint {
 
 	private final HttpMessageConverter<OAuth2AccessTokenResponse> accessTokenHttpResponseConverter = new OAuth2AccessTokenResponseHttpMessageConverter();
 
-	private final HttpMessageConverter<OAuth2Error> errorHttpResponseConverter = new OAuth2ErrorHttpMessageConverter();
+	private final AuthenticationFailureHandler authenticationFailureHandler = new PigAuthenticationFailureEventHandler();
 
 	private final OAuth2AuthorizationService authorizationService;
 
@@ -103,9 +106,10 @@ public class PigTokenEndpoint {
 			@RequestParam(OAuth2ParameterNames.CLIENT_ID) String clientId,
 			@RequestParam(OAuth2ParameterNames.SCOPE) String scope,
 			@RequestParam(OAuth2ParameterNames.STATE) String state) {
+		SysOauthClientDetails clientDetails = RetOps
+				.of(clientDetailsService.getClientDetailsById(clientId, SecurityConstants.FROM_IN)).getData()
+				.orElseThrow(() -> new OAuthClientException("clientId 不合法"));
 
-		R<SysOauthClientDetails> r = clientDetailsService.getClientDetailsById(clientId, SecurityConstants.FROM_IN);
-		SysOauthClientDetails clientDetails = r.getData();
 		Set<String> authorizedScopes = StringUtils.commaDelimitedListToSet(clientDetails.getScope());
 		modelAndView.addObject("clientId", clientId);
 		modelAndView.addObject("state", state);
@@ -135,21 +139,20 @@ public class PigTokenEndpoint {
 	 */
 	@SneakyThrows
 	@GetMapping("/check_token")
-	public void checkToken(String token, HttpServletResponse response) {
+	public void checkToken(String token, HttpServletResponse response, HttpServletRequest request) {
 		ServletServerHttpResponse httpResponse = new ServletServerHttpResponse(response);
 
 		if (StrUtil.isBlank(token)) {
 			httpResponse.setStatusCode(HttpStatus.UNAUTHORIZED);
-			this.errorHttpResponseConverter.write(new OAuth2Error(OAuth2ErrorCodesExpand.TOKEN_MISSING), null,
-					httpResponse);
+			this.authenticationFailureHandler.onAuthenticationFailure(request, response,
+					new InvalidBearerTokenException(OAuth2ErrorCodesExpand.TOKEN_MISSING));
 		}
 		OAuth2Authorization authorization = authorizationService.findByToken(token, OAuth2TokenType.ACCESS_TOKEN);
 
 		// 如果令牌不存在 返回401
-		if (authorization == null) {
-			httpResponse.setStatusCode(HttpStatus.UNAUTHORIZED);
-			this.errorHttpResponseConverter.write(new OAuth2Error(OAuth2ErrorCodesExpand.TOKEN_MISSING), null,
-					httpResponse);
+		if (authorization == null || authorization.getAccessToken() == null) {
+			this.authenticationFailureHandler.onAuthenticationFailure(request, response,
+					new InvalidBearerTokenException(OAuth2ErrorCodesExpand.INVALID_BEARER_TOKEN));
 		}
 
 		Map<String, Object> claims = authorization.getAccessToken().getClaims();
@@ -166,6 +169,10 @@ public class PigTokenEndpoint {
 	@DeleteMapping("/{token}")
 	public R<Boolean> removeToken(@PathVariable("token") String token) {
 		OAuth2Authorization authorization = authorizationService.findByToken(token, OAuth2TokenType.ACCESS_TOKEN);
+		if (authorization == null) {
+			return R.ok();
+		}
+
 		OAuth2Authorization.Token<OAuth2AccessToken> accessToken = authorization.getAccessToken();
 		if (accessToken == null || StrUtil.isBlank(accessToken.getToken().getTokenValue())) {
 			return R.ok();
@@ -175,8 +182,8 @@ public class PigTokenEndpoint {
 		// 清空access token
 		authorizationService.remove(authorization);
 		// 处理自定义退出事件，保存相关日志
-		Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-		SpringContextHolder.publishEvent(new LogoutSuccessEvent(authentication));
+		SpringContextHolder.publishEvent(new LogoutSuccessEvent(new PreAuthenticatedAuthenticationToken(
+				authorization.getPrincipalName(), authorization.getRegisteredClientId())));
 		return R.ok();
 	}
 

@@ -1,11 +1,13 @@
 package com.pig4cloud.pig.common.security.service;
 
 import cn.hutool.core.util.BooleanUtil;
+import cn.hutool.core.util.StrUtil;
 import com.pig4cloud.pig.admin.api.entity.SysOauthClientDetails;
 import com.pig4cloud.pig.admin.api.feign.RemoteClientDetailsService;
 import com.pig4cloud.pig.common.core.constant.CacheConstants;
 import com.pig4cloud.pig.common.core.constant.SecurityConstants;
-import com.pig4cloud.pig.common.core.util.R;
+import com.pig4cloud.pig.common.core.util.RetOps;
+import com.pig4cloud.pig.common.security.util.OAuthClientException;
 import lombok.RequiredArgsConstructor;
 import lombok.SneakyThrows;
 import org.springframework.cache.annotation.Cacheable;
@@ -19,6 +21,7 @@ import org.springframework.security.oauth2.server.authorization.config.TokenSett
 import org.springframework.util.StringUtils;
 
 import java.time.Duration;
+import java.util.Arrays;
 import java.util.Optional;
 
 /**
@@ -82,12 +85,13 @@ public class PigRemoteRegisteredClientRepository implements RegisteredClientRepo
 	@SneakyThrows
 	@Cacheable(value = CacheConstants.CLIENT_DETAILS_KEY, key = "#clientId", unless = "#result == null")
 	public RegisteredClient findByClientId(String clientId) {
-		R<SysOauthClientDetails> detailsR = clientDetailsService.getClientDetailsById(clientId,
-				SecurityConstants.FROM_IN);
-		SysOauthClientDetails clientDetails = detailsR.getData();
+
+		SysOauthClientDetails clientDetails = RetOps
+				.of(clientDetailsService.getClientDetailsById(clientId, SecurityConstants.FROM_IN)).getData()
+				.orElseThrow(() -> new OAuthClientException("clientId 不合法"));
 
 		RegisteredClient.Builder builder = RegisteredClient.withId(clientDetails.getClientId())
-				.clientId(clientDetails.getClientSecret())
+				.clientId(clientDetails.getClientId())
 				.clientSecret(SecurityConstants.NOOP + clientDetails.getClientSecret())
 				.clientAuthenticationMethod(ClientAuthenticationMethod.CLIENT_SECRET_BASIC);
 
@@ -96,10 +100,13 @@ public class PigRemoteRegisteredClientRepository implements RegisteredClientRepo
 				.ifPresent(grants -> StringUtils.commaDelimitedListToSet(grants)
 						.forEach(s -> builder.authorizationGrantType(new AuthorizationGrantType(s))));
 		// 回调地址
-		Optional.ofNullable(clientDetails.getWebServerRedirectUri()).ifPresent(builder::redirectUri);
+		Optional.ofNullable(clientDetails.getWebServerRedirectUri()).ifPresent(redirectUri -> Arrays
+				.stream(redirectUri.split(StrUtil.COMMA)).filter(StrUtil::isNotBlank).forEach(builder::redirectUri));
 
 		// scope
-		Optional.ofNullable(clientDetails.getScope()).ifPresent(builder::scope);
+		Optional.ofNullable(clientDetails.getScope()).ifPresent(
+				scope -> Arrays.stream(scope.split(StrUtil.COMMA)).filter(StrUtil::isNotBlank).forEach(builder::scope));
+
 		return builder
 				.tokenSettings(TokenSettings.builder().accessTokenFormat(OAuth2TokenFormat.REFERENCE)
 						.accessTokenTimeToLive(Duration.ofSeconds(Optional
