@@ -56,6 +56,8 @@ public class PigPaginationInnerInterceptor extends PaginationInnerInterceptor {
 		// size 小于 0 直接设置为 0 , 即不查询任何数据
 		if (null != page && page.getSize() < 0) {
 			page.setSize(0);
+		}else if(page.getSize()>100){
+			page.setSize(100);
 		}
 		super.beforeQuery(executor, ms, page, rowBounds, resultHandler, boundSql);
 	}
