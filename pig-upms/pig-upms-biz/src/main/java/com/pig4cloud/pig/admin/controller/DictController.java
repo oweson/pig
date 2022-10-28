@@ -16,6 +16,7 @@
 
 package com.pig4cloud.pig.admin.controller;
 
+import cn.hutool.core.util.StrUtil;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
@@ -74,7 +75,8 @@ public class DictController {
 	 */
 	@GetMapping("/page")
 	public R<IPage<SysDict>> getDictPage(Page page, SysDict sysDict) {
-		return R.ok(sysDictService.page(page, Wrappers.query(sysDict)));
+		return R.ok(sysDictService.page(page, Wrappers.<SysDict>lambdaQuery()
+				.like(StrUtil.isNotBlank(sysDict.getDictKey()), SysDict::getDictKey, sysDict.getDictKey())));
 	}
 
 	/**
@@ -82,10 +84,10 @@ public class DictController {
 	 * @param type 类型
 	 * @return 同类型字典
 	 */
-	@GetMapping("/type/{type}")
-	@Cacheable(value = CacheConstants.DICT_DETAILS, key = "#type")
-	public R<List<SysDictItem>> getDictByType(@PathVariable String type) {
-		return R.ok(sysDictItemService.list(Wrappers.<SysDictItem>query().lambda().eq(SysDictItem::getType, type)));
+	@GetMapping("/key/{key}")
+	@Cacheable(value = CacheConstants.DICT_DETAILS, key = "#key")
+	public R<List<SysDictItem>> getDictByKey(@PathVariable String key) {
+		return R.ok(sysDictItemService.list(Wrappers.<SysDictItem>query().lambda().eq(SysDictItem::getDictKey, key)));
 	}
 
 	/**

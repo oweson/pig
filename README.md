@@ -1,14 +1,15 @@
 <p align="center">
- <img src="https://img.shields.io/badge/Pig-3.5-success.svg" alt="Build Status">
+ <img src="https://img.shields.io/badge/Pig-3.6-success.svg" alt="Build Status">
  <img src="https://img.shields.io/badge/Spring%20Cloud-2021-blue.svg" alt="Coverage Status">
  <img src="https://img.shields.io/badge/Spring%20Boot-2.7-blue.svg" alt="Downloads">
+ <img src="https://img.shields.io/badge/Vue-3.2-blue.svg" alt="Downloads">
  <img src="https://img.shields.io/github/license/pig-mesh/pig"/>
 </p>
 
 ## 系统说明
 
 - 基于 Spring Cloud 2021 、Spring Boot 2.7、 OAuth2 的 RBAC **权限管理系统**
-- 基于数据驱动视图的理念封装 element-ui，即使没有 vue 的使用经验也能快速上手
+- 基于数据驱动视图的理念封装 element-plus，即使没有 vue 的使用经验也能快速上手
 - 提供对常见容器化支持 Docker、Kubernetes、Rancher2 支持
 - 提供 lambda 、stream api 、webflux 的生产实践
 
@@ -29,21 +30,21 @@
 
 ![](https://minio.pigx.vip/oss/1648184189.png)
 
-
 <a href="https://apifox.cn/a1pigcloud" target="_blank"><img src="https://minio.pigx.vip/oss/1662368326.png" height="83%" width="83%"></a></td>
+
 ## 快速开始
 
 ### 核心依赖
 
 | 依赖                   | 版本         |
 | ---------------------- |------------|
-| Spring Boot            | 2.7.3      |
-| Spring Cloud           | 2021.0.3   |
-| Spring Cloud Alibaba   | 2021.0.1.0 |
+| Spring Boot            | 2.7.4      |
+| Spring Cloud           | 2021.0.4   |
+| Spring Cloud Alibaba   | 2021.0.4.0 |
 | Spring Authorization Server | 0.3.1      |
 | Mybatis Plus           | 3.5.2      |
-| hutool                 | 5.8.5      |
-| Avue                   | 2.6.18     |
+| hutool                 | 5.8.8      |
+| Avue                   | 3.1.3      |
 
 ### 模块说明
 
@@ -62,7 +63,8 @@ pig
      ├── pig-common-seata -- 分布式事务
      ├── pig-common-security -- 安全工具类
      ├── pig-common-swagger -- 接口文档
-     └── pig-common-feign -- feign 扩展封装
+     ├── pig-common-feign -- feign 扩展封装
+     └── pig-common-xss -- xss 安全封装
 ├── pig-register -- Nacos Server[8848]
 ├── pig-gateway -- Spring Cloud Gateway网关[9999]
 └── pig-upms -- 通用用户权限管理模块

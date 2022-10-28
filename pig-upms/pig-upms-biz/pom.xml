@@ -21,7 +21,7 @@
     <parent>
         <groupId>com.pig4cloud</groupId>
         <artifactId>pig-upms</artifactId>
-        <version>3.5.2</version>
+        <version>3.6.1</version>
     </parent>
 
     <artifactId>pig-upms-biz</artifactId>
@@ -83,6 +83,11 @@
         <dependency>
             <groupId>io.springboot.sms</groupId>
             <artifactId>aliyun-sms-spring-boot-starter</artifactId>
+        </dependency>
+        <!--xss 过滤-->
+        <dependency>
+            <groupId>com.pig4cloud</groupId>
+            <artifactId>pig-common-xss</artifactId>
         </dependency>
         <!--undertow容器-->
         <dependency>
