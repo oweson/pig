@@ -51,7 +51,7 @@ import javax.servlet.http.HttpServletResponse;
 @RequestMapping("/sys-file")
 @Tag(name = "文件管理模块")
 @SecurityRequirement(name = HttpHeaders.AUTHORIZATION)
-public class FileController {
+public class SysFileController {
 
 	private final SysFileService sysFileService;
 
@@ -65,7 +65,7 @@ public class FileController {
 	@GetMapping("/page")
 	public R<IPage<SysFile>> getSysFilePage(Page page, SysFile sysFile) {
 		return R.ok(sysFileService.page(page, Wrappers.<SysFile>lambdaQuery()
-				.like(StrUtil.isNotBlank(sysFile.getFileName()), SysFile::getFileName, sysFile.getFileName())));
+			.like(StrUtil.isNotBlank(sysFile.getFileName()), SysFile::getFileName, sysFile.getFileName())));
 	}
 
 	/**

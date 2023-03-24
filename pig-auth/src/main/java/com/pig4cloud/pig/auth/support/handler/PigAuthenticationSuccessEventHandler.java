@@ -84,6 +84,8 @@ public class PigAuthenticationSuccessEventHandler implements AuthenticationSucce
 				Long endTime = System.currentTimeMillis();
 				logVo.setTime(endTime - startTime);
 			}
+
+			logVo.setServiceId(accessTokenAuthentication.getRegisteredClient().getClientId());
 			logVo.setCreateBy(userInfo.getName());
 			logVo.setUpdateBy(userInfo.getName());
 			SpringContextHolder.publishEvent(new SysLogEvent(logVo));
@@ -103,7 +105,8 @@ public class PigAuthenticationSuccessEventHandler implements AuthenticationSucce
 		Map<String, Object> additionalParameters = accessTokenAuthentication.getAdditionalParameters();
 
 		OAuth2AccessTokenResponse.Builder builder = OAuth2AccessTokenResponse.withToken(accessToken.getTokenValue())
-				.tokenType(accessToken.getTokenType()).scopes(accessToken.getScopes());
+			.tokenType(accessToken.getTokenType())
+			.scopes(accessToken.getScopes());
 		if (accessToken.getIssuedAt() != null && accessToken.getExpiresAt() != null) {
 			builder.expiresIn(ChronoUnit.SECONDS.between(accessToken.getIssuedAt(), accessToken.getExpiresAt()));
 		}

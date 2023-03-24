@@ -14,22 +14,27 @@
  * limitations under the License.
  */
 
-package com.pig4cloud.pig.common.security.feign;
+package com.pig4cloud.pig.common.feign;
 
-import feign.RequestInterceptor;
+import com.pig4cloud.pig.common.feign.retry.FeignRetryAspect;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
 import org.springframework.context.annotation.Bean;
-import org.springframework.security.oauth2.server.resource.web.BearerTokenResolver;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.retry.support.RetryTemplate;
 
-public class PigFeignClientConfiguration {
+/**
+ * 重试配置
+ *
+ * @author lengleng
+ * @date 2023年03月09日
+ */
+@Configuration(proxyBeanMethods = false)
+@ConditionalOnClass(RetryTemplate.class)
+public class PigFeignRetryAutoConfiguration {
 
-	/**
-	 * 注入 oauth2 feign token 增强
-	 * @param tokenResolver token获取处理器
-	 * @return 拦截器
-	 */
 	@Bean
-	public RequestInterceptor oauthRequestInterceptor(BearerTokenResolver tokenResolver) {
-		return new PigOAuthRequestInterceptor(tokenResolver);
+	public FeignRetryAspect feignRetryAspect() {
+		return new FeignRetryAspect();
 	}
 
 }

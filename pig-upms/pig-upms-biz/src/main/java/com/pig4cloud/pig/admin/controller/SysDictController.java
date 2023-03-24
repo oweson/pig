@@ -52,7 +52,7 @@ import java.util.List;
 @RequestMapping("/dict")
 @Tag(name = "字典管理模块")
 @SecurityRequirement(name = HttpHeaders.AUTHORIZATION)
-public class DictController {
+public class SysDictController {
 
 	private final SysDictItemService sysDictItemService;
 
@@ -76,12 +76,12 @@ public class DictController {
 	@GetMapping("/page")
 	public R<IPage<SysDict>> getDictPage(Page page, SysDict sysDict) {
 		return R.ok(sysDictService.page(page, Wrappers.<SysDict>lambdaQuery()
-				.like(StrUtil.isNotBlank(sysDict.getDictKey()), SysDict::getDictKey, sysDict.getDictKey())));
+			.like(StrUtil.isNotBlank(sysDict.getDictKey()), SysDict::getDictKey, sysDict.getDictKey())));
 	}
 
 	/**
 	 * 通过字典类型查找字典
-	 * @param type 类型
+	 * @param key 类型
 	 * @return 同类型字典
 	 */
 	@GetMapping("/key/{key}")

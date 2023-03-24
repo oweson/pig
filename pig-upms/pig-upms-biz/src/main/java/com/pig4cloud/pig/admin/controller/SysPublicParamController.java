@@ -44,7 +44,7 @@ import org.springframework.web.bind.annotation.*;
 @RequestMapping("/param")
 @Tag(name = "公共参数配置")
 @SecurityRequirement(name = HttpHeaders.AUTHORIZATION)
-public class PublicParamController {
+public class SysPublicParamController {
 
 	private final SysPublicParamService sysPublicParamService;
 
@@ -71,10 +71,10 @@ public class PublicParamController {
 	public R getSysPublicParamPage(Page page, SysPublicParam sysPublicParam) {
 		return R.ok(sysPublicParamService.page(page,
 				Wrappers.<SysPublicParam>lambdaQuery()
-						.like(StrUtil.isNotBlank(sysPublicParam.getPublicName()), SysPublicParam::getPublicName,
-								sysPublicParam.getPublicName())
-						.like(StrUtil.isNotBlank(sysPublicParam.getPublicKey()), SysPublicParam::getPublicKey,
-								sysPublicParam.getPublicKey())));
+					.like(StrUtil.isNotBlank(sysPublicParam.getPublicName()), SysPublicParam::getPublicName,
+							sysPublicParam.getPublicName())
+					.like(StrUtil.isNotBlank(sysPublicParam.getPublicKey()), SysPublicParam::getPublicKey,
+							sysPublicParam.getPublicKey())));
 	}
 
 	/**

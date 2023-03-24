@@ -1,6 +1,7 @@
 package com.pig4cloud.pig.common.security.component;
 
 import cn.hutool.extra.spring.SpringUtil;
+import com.pig4cloud.pig.common.core.constant.SecurityConstants;
 import com.pig4cloud.pig.common.security.service.PigUser;
 import com.pig4cloud.pig.common.security.service.PigUserDetailsService;
 import lombok.RequiredArgsConstructor;
@@ -11,6 +12,7 @@ import org.springframework.security.core.authority.AuthorityUtils;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.security.oauth2.core.AuthorizationGrantType;
+import org.springframework.security.oauth2.core.DefaultOAuth2AuthenticatedPrincipal;
 import org.springframework.security.oauth2.core.OAuth2AuthenticatedPrincipal;
 import org.springframework.security.oauth2.server.authorization.OAuth2Authorization;
 import org.springframework.security.oauth2.server.authorization.OAuth2AuthorizationService;
@@ -43,17 +45,18 @@ public class PigCustomOpaqueTokenIntrospector implements OpaqueTokenIntrospector
 
 		// 客户端模式默认返回
 		if (AuthorizationGrantType.CLIENT_CREDENTIALS.equals(oldAuthorization.getAuthorizationGrantType())) {
-			return new PigClientCredentialsOAuth2AuthenticatedPrincipal(oldAuthorization.getAttributes(),
-					AuthorityUtils.NO_AUTHORITIES, oldAuthorization.getPrincipalName());
+			return new DefaultOAuth2AuthenticatedPrincipal(oldAuthorization.getPrincipalName(),
+					oldAuthorization.getAttributes(), AuthorityUtils.NO_AUTHORITIES);
 		}
 
 		Map<String, PigUserDetailsService> userDetailsServiceMap = SpringUtil
-				.getBeansOfType(PigUserDetailsService.class);
+			.getBeansOfType(PigUserDetailsService.class);
 
-		Optional<PigUserDetailsService> optional = userDetailsServiceMap.values().stream()
-				.filter(service -> service.support(Objects.requireNonNull(oldAuthorization).getRegisteredClientId(),
-						oldAuthorization.getAuthorizationGrantType().getValue()))
-				.max(Comparator.comparingInt(Ordered::getOrder));
+		Optional<PigUserDetailsService> optional = userDetailsServiceMap.values()
+			.stream()
+			.filter(service -> service.support(Objects.requireNonNull(oldAuthorization).getRegisteredClientId(),
+					oldAuthorization.getAuthorizationGrantType().getValue()))
+			.max(Comparator.comparingInt(Ordered::getOrder));
 
 		UserDetails userDetails = null;
 		try {
@@ -69,7 +72,13 @@ public class PigCustomOpaqueTokenIntrospector implements OpaqueTokenIntrospector
 		catch (Exception ex) {
 			log.error("资源服务器 introspect Token error {}", ex.getLocalizedMessage());
 		}
-		return (PigUser) userDetails;
+
+		// 注入扩展属性,方便上下文获取客户端ID
+		PigUser user = (PigUser) userDetails;
+		Objects.requireNonNull(user)
+			.getAttributes()
+			.put(SecurityConstants.CLIENT_ID, oldAuthorization.getRegisteredClientId());
+		return user;
 	}
 
 }
