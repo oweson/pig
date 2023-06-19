@@ -13,22 +13,21 @@
 - 提供对常见容器化支持 Docker、Kubernetes、Rancher2 支持
 - 提供 lambda 、stream api 、webflux 的生产实践
 
-
 ## 文档视频
 
-[ 🚀🚀🚀 低代码数据可视化](http://datav.avuejs.com)
+[ 🚀🚀🚀 低代码数据可视化](http://datav.pig4cloud.com)
 
-[ 配套文档 wiki.pigx.vip](https://wiki.pigx.vip)
+[ 配套文档 wiki.pig4cloud.com](https://wiki.pig4cloud.com)
 
-[ 配套视频 tv.pigx.vip](https://www.bilibili.com/video/BV12t411B7e9)
+[ 配套视频 tv.pig4cloud.com](https://www.bilibili.com/video/BV12t411B7e9)
 
-[PIGX 在线体验 pigx.pigx.vip](http://pigx.pigx.vip)
+[PIGX 在线体验 pigx.pigx.top](http://pigx.pigx.top)
 
-[产品白皮书 paper.pigx.vip](https://paper.pigx.vip)
+[产品白皮书 paper.pig4cloud.com](https://paper.pig4cloud.com)
 
 ## 微信群 [禁广告]
 
-![](https://minio.pigx.vip/oss/1648184189.png)
+![](https://minio.pigx.top/oss/1648184189.png)
 
 ## 快速开始
 
@@ -37,23 +36,16 @@
 - master: java8 + springboot 2.7 + springcloud 2021
 - jdk17: java17 + springboot 3.0 + springcloud 2022
 
-| 分支              | 说明                                                               |
-|-----------------|------------------------------------------------------------------|
-| master          | java8 + springboot 2.7 + springcloud 2021                        |
-| sca-springboot3 | java17 + springboot 3.0 + springcloud 2022 |
-| sct-springboot3 | java17 + springboot 3.0 + springcloud 2022 |
-
-
 ### 核心依赖
 
-| 依赖                   | 版本         |
-| ---------------------- |------------|
-| Spring Boot            | 2.7.10      |
-| Spring Cloud           | 2021.0.6   |
-| Spring Cloud Alibaba   | 2021.0.5.0 |
-| Spring Authorization Server | 0.4.1      |
-| Mybatis Plus           | 3.5.3.1    |
-| hutool                 | 5.8.15     |
+| 依赖                          | 版本         |
+|-----------------------------|------------|
+| Spring Boot                 | 2.7.12     |
+| Spring Cloud                | 2021.0.7   |
+| Spring Cloud Alibaba        | 2021.0.5.0 |
+| Spring Authorization Server | 0.4.2      |
+| Mybatis Plus                | 3.5.3.1    |
+| hutool                      | 5.8.19     |
 
 ### 模块说明
 
@@ -88,15 +80,10 @@ pig
 
 ### 本地开发 运行
 
-pig 提供了详细的[部署文档 wiki.pigx.vip](https://www.yuque.com/pig4cloud/pig/vsdox9)，包括开发环境安装、服务端代码运行、前端代码运行等。
+pig 提供了详细的[部署文档 wiki.pig4cloud.com](https://www.yuque.com/pig4cloud/pig/vsdox9)，包括开发环境安装、服务端代码运行、前端代码运行等。
 
 请务必**完全按照**文档部署运行章节 进行操作，减少踩坑弯路！！
 
-### 定制自己微服务
-
-[PIG DIY](https://pig4cloud.com/#/common/diy)
-
-[PIG ARCHETYPE](https://pig4cloud.com/#/common/archetype)
 
 ### Docker 运行
 
@@ -119,12 +106,12 @@ cnpm install && cnpm run build:docker && cd docker && docker-compose up -d
 
 <table>
   <tr>
-    <td><a href="https://www.bilibili.com/video/av45084065" target="_blank"><img src="https://minio.pigx.vip/oss/1655474345.jpg"></a></td>
-    <td><a href="https://www.bilibili.com/video/av77344954" target="_blank"><img src="https://minio.pigx.vip/oss/1656837143.jpg"></a></td>
+    <td><a href="https://www.bilibili.com/video/av45084065" target="_blank"><img src="https://minio.pigx.top/oss/1655474345.jpg"></a></td>
+    <td><a href="https://www.bilibili.com/video/av77344954" target="_blank"><img src="https://minio.pigx.top/oss/1656837143.jpg"></a></td>
   </tr>
     <tr>
-    <td><a href="https://www.bilibili.com/video/BV1J5411476V" target="_blank"><img src="https://minio.pigx.vip/oss/1655474369.jpg"></a></td>
-    <td><a href="https://www.bilibili.com/video/BV14p4y197K5" target="_blank"><img src="https://minio.pigx.vip/oss/1655474381.jpg"></a></td>
+    <td><a href="https://www.bilibili.com/video/BV1J5411476V" target="_blank"><img src="https://minio.pigx.top/oss/1655474369.jpg"></a></td>
+    <td><a href="https://www.bilibili.com/video/BV14p4y197K5" target="_blank"><img src="https://minio.pigx.top/oss/1655474381.jpg"></a></td>
   </tr>
 </table>
 
@@ -135,8 +122,7 @@ cnpm install && cnpm run build:docker && cd docker && docker-compose up -d
 pig 开源软件遵循 [Apache 2.0 协议](https://www.apache.org/licenses/LICENSE-2.0.html)。
 允许商业使用，但务必保留类作者、Copyright 信息。
 
-![](https://minio.pigx.vip/oss/1655474288.jpg)
-
+![](https://minio.pigx.top/oss/1655474288.jpg)
 
 ### 其他说明
 
@@ -151,7 +137,8 @@ pig 开源软件遵循 [Apache 2.0 协议](https://www.apache.org/licenses/LICEN
     2. 如果使用 IntelliJ IDEA
        开发，请安装自动格式化软件 <a href="https://repo1.maven.org/maven2/io/spring/javaformat/spring-javaformat-intellij-idea-plugin/" target="_blank">
        spring-javaformat-intellij-idea-plugin</a>
-    3. 其他开发工具，请参考 <a href="https://github.com/spring-io/spring-javaformat" target="_blank">spring-javaformat</a>
+    3. 其他开发工具，请参考 <a href="https://github.com/spring-io/spring-javaformat" target="_blank">
+       spring-javaformat</a>
        说明，或`提交代码前`在项目根目录运行下列命令（需要开发者电脑支持`mvn`命令）进行代码格式化
        ```
        mvn spring-javaformat:apply
@@ -159,5 +146,3 @@ pig 开源软件遵循 [Apache 2.0 协议](https://www.apache.org/licenses/LICEN
    </details>
 
 2. 欢迎提交 [issue](https://gitee.com/log4j/pig/issues)，请写清楚遇到问题的原因、开发环境、复显步骤。
-
-3. 联系作者 <a href="mailto:pig4cloud@qq.com">pig4cloud@qq.com</a>
